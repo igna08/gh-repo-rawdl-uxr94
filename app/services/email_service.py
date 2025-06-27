@@ -61,7 +61,7 @@ def send_invitation_email(recipient_email: str, invitation_token: str):
                                 text-align: center;
                             ">
                                 <!-- Logo -->
-                                <img src="https://app-web-final-qr.vercel.app/logo.png" 
+                                <img src="https://app-web-final-qr.vercel.app/logo_blanco.png" 
                                     alt="Scanly Logo" 
                                     style="
                                         height: 70px; 
