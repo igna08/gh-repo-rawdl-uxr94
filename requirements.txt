@@ -13,3 +13,4 @@ uuid
 email-validator
 pydantic>=2.0
 pydantic-settings
+qrcode
