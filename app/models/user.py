@@ -54,7 +54,8 @@ class RoleFlags(BaseModel):
     school_admin: bool
     teacher: bool
     inventory_manager: bool
-
+class GoogleLoginRequest(BaseModel):
+    id_token: str
 class UserWithRoles(UserRead):
     """
     Hereda todos los campos de UserRead y añade un bloque `roles`

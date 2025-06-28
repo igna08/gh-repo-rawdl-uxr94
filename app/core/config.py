@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     SMTP_USER: str
     SMTP_PASSWORD: str
     SMTP_SENDER_EMAIL: str
-
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: Optional[str] = None  # Solo necesario para server-side flow
     # URL del frontend para enlaces en correos
     FRONTEND_URL: str
 

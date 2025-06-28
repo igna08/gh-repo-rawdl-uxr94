@@ -1,17 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta # Added for token expiry
+from datetime import timedelta
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+import uuid
 
 from app.core.database import get_db
-from app.models.user import UserCreate, UserRead, Token # UserCreate, UserRead are Pydantic models from app.models.user
-from app.schemas.invitation import RegisterUserWithInvitation # Pydantic schema for the new endpoint
+from app.models.user import UserCreate, UserRead, Token, User , GoogleLoginRequest # Agregado User (el modelo de SQLAlchemy)
+from app.schemas.invitation import RegisterUserWithInvitation
 import app.services.auth_service as auth_service
-import app.services.invitation_service as invitation_service # Added
-from app.core.security import create_access_token
+import app.services.invitation_service as invitation_service
+from app.core.security import create_access_token, get_password_hash  # Agregado get_password_hash
 from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Modelo Pydantic para Google Login Request
+
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register_user_endpoint(user_in: UserCreate, db: Session = Depends(get_db)):
@@ -81,6 +87,74 @@ async def register_with_invitation(
             detail="An unexpected error occurred during registration with invitation."
         )
 
+@router.post("/google-login", response_model=Token)
+async def google_login(
+    payload: GoogleLoginRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Login or register user with Google OAuth2.
+    """
+    # 1. Validar el id_token con Google
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.id_token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de Google inválido",
+        )
+
+    # 2. Extraer datos
+    email = idinfo.get("email")
+    sub = idinfo.get("sub")
+    name = idinfo.get("name", email.split("@")[0] if email else "")
+
+    if not email or not sub:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Respuesta de Google incompleta",
+        )
+
+    # 3. Buscar o crear usuario - CORREGIDO: usar el modelo User de SQLAlchemy
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        # Registro automático
+        user = User(
+            full_name=name,
+            email=email,
+            status="active",  # Usuario OAuth se activa automáticamente
+            password_hash=get_password_hash(uuid.uuid4().hex),
+            # Nota: Si tienes campos oauth_provider y oauth_id en tu modelo User, descomenta estas líneas:
+            # oauth_provider="google",
+            # oauth_id=sub,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        # Si ya existe, asegurar que esté activo
+        if user.status == "pending":
+            user.status = "active"
+            db.commit()
+        
+        # Si tienes campos OAuth en tu modelo User, descomenta estas líneas:
+        # if not user.oauth_provider:
+        #     user.oauth_provider = "google"
+        #     user.oauth_id = sub
+        #     db.commit()
+
+    # 4. Generar access token (mismo método que en /login)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        subject=user.email,
+        expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
