@@ -7,6 +7,10 @@ from app.models.user import UserRead, UserWithRoles
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+@router.get("/health")
+def health():
+    return "ok", 200
+
 @router.get("/me", response_model=UserWithRoles)
 async def read_users_me(current: dict = Depends(get_current_user)):
     """
