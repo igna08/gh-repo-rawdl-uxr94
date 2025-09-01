@@ -13,7 +13,7 @@ from app.models.asset import Asset as AssetModel # To type hint asset parameter
 from app.schemas.qr import QRCodeCreate # Though not directly used if asset is passed
 
 # Configuration for QR code URL (replace with actual domain/config)
-BASE_APP_URL = "https://yourapp.com" 
+BASE_APP_URL = "https://issa-qr.vercel.app" 
 def get_asset(db: Session, asset_id: UUID) -> AssetModel | None:
     return db.query(AssetModel).filter(AssetModel.id == asset_id, AssetModel.deleted_at == None).first()
 
