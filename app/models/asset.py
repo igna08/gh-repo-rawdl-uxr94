@@ -95,7 +95,6 @@ class AssetEvent(Base):
     
     event_type = Column(String, nullable=False, index=True)
     timestamp = Column(DateTime(timezone=True), server_default="CURRENT_TIMESTAMP", nullable=False)
-    asset_metadata = Column(JSON, nullable=True)
 
     asset = relationship("Asset", back_populates="events")
     # Placeholder for User relationship
