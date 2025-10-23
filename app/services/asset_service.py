@@ -92,7 +92,7 @@ def log_asset_event(
     db: Session, 
     asset_id: UUID, 
     event_type: str, 
-    user_id: Optional[UUID],  # User ID can be None for system events
+    user_id: Optional[UUID],
     metadata: Optional[Dict[str, Any]] = None
 ) -> AssetEvent:
     event_data = AssetEventCreate(asset_id=asset_id, user_id=user_id, event_type=event_type, metadata=metadata)
@@ -100,12 +100,10 @@ def log_asset_event(
         asset_id=event_data.asset_id,
         user_id=event_data.user_id,
         event_type=event_data.event_type,
-        metadata=event_data.metadata,
-        timestamp=datetime.utcnow() # Ensure timestamp is set here
+        asset_metadata=event_data.metadata,  # ← CAMBIO AQUÍ
+        timestamp=datetime.utcnow()
     )
     db.add(db_event)
-    # db.commit() # Decide on commit strategy: commit per event or per main operation
-    # db.refresh(db_event) # Refresh if ID or other server-defaults are needed immediately
     return db_event
 
 # --- Asset Service Functions ---
