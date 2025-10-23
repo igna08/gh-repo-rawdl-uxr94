@@ -169,17 +169,38 @@ def update_asset(db: Session, asset_id: UUID, asset_in: AssetUpdate, current_use
     changes = {}
 
     for key, value in update_data.items():
+        # Saltar template_id en este loop, lo manejamos por separado
+        if key == "template_id":
+            continue
+            
         old_value = getattr(db_asset, key)
         if old_value != value:
-            changes[key] = {"old": str(old_value), "new": str(value)} # Log changes
+            changes[key] = {"old": str(old_value), "new": str(value)}
             setattr(db_asset, key, value)
     
-    if "template_id" in update_data and update_data["template_id"] is not None:
-        try:
-            setattr(db_asset, "template_id", UUID(update_data["template_id"]))
-        except ValueError:
-             raise ValueError(f"Invalid template_id format: {update_data['template_id']}. Must be a valid UUID string.")
-
+    # Manejar template_id por separado
+    if "template_id" in update_data:
+        template_id_value = update_data["template_id"]
+        
+        # Si ya es UUID, úsalo directamente
+        if isinstance(template_id_value, UUID):
+            new_template_id = template_id_value
+        # Si es string, conviértelo a UUID
+        elif isinstance(template_id_value, str):
+            try:
+                new_template_id = UUID(template_id_value)
+            except ValueError:
+                raise ValueError(f"Invalid template_id format: {template_id_value}. Must be a valid UUID string.")
+        # Si es None, déjalo como None
+        elif template_id_value is None:
+            new_template_id = None
+        else:
+            raise ValueError(f"Invalid template_id type: {type(template_id_value)}")
+        
+        # Solo actualizar si cambió
+        if db_asset.template_id != new_template_id:
+            changes["template_id"] = {"old": str(db_asset.template_id), "new": str(new_template_id)}
+            db_asset.template_id = new_template_id
 
     if changes:
         db_asset.updated_at = datetime.utcnow()
