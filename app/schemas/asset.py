@@ -57,22 +57,27 @@ class AssetTemplateRead(AssetTemplateBase):
     class Config:
         from_attributes = True  # Cambia orm_mode por from_attributes
 # --- AssetEvent Schemas ---
+# --- AssetEvent Schemas ---
 class AssetEventBase(BaseModel):
     event_type: str
-    metadata: Optional[Dict[str, Any]] = None
+    asset_metadata: Optional[Dict[str, Any]] = None  # ← CAMBIO AQUÍ
 
-class AssetEventCreate(AssetEventBase):
+class AssetEventCreate(BaseModel):  # ← Mejor separar completamente
     asset_id: UUID
     user_id: UUID
+    event_type: str
+    metadata: Optional[Dict[str, Any]] = None  # ← Este queda como "metadata" para recibir datos
 
-class AssetEventRead(AssetEventBase):
+class AssetEventRead(BaseModel):  # ← También separar completamente
     id: UUID
     asset_id: UUID
     user_id: Optional[UUID]
+    event_type: str
     timestamp: datetime
+    asset_metadata: Optional[Dict[str, Any]] = None  # ← CAMBIO AQUÍ
 
     class Config:
-        orm_mode = True
+        from_attributes = True  # ← Actualiza también esto (orm_mode está deprecado)
 
 # --- Asset Schemas ---
 class AssetBase(BaseModel):
