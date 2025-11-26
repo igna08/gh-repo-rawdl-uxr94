@@ -1,7 +1,7 @@
 from uuid import UUID
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Path, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Path, Body, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -14,6 +14,7 @@ from app.services import asset_service
 from app.models.asset import Asset as AssetModel, AssetCategory as AssetCategoryModel, AssetTemplate as AssetTemplateModel
 from app.routers.dashboard import get_current_super_admin_user # Added
 from app.models.user import User as ORMUser # Added
+from pydantic import BaseModel
 
 async def get_current_user_id() -> UUID:
     # In a real app, this would come from an authentication token
@@ -220,8 +221,112 @@ def read_asset_event_history(
     # db_asset = asset_service.get_asset(db, asset_id=asset_id)
     # if db_asset is None:
     #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-        
+
     events = asset_service.get_asset_events(db, asset_id=asset_id, skip=skip, limit=limit)
     if not events and not asset_service.get_asset(db, asset_id=asset_id): # if no events AND asset doesnt exist
          raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found or no events for this asset.")
     return events
+
+# --- New Endpoints for Additional Functionality ---
+
+class ImageUpdateRequest(BaseModel):
+    image_url: str
+
+@router.patch("/{asset_id}/image", response_model=AssetRead, summary="Update asset image")
+def update_asset_image(
+    asset_id: UUID = Path(..., description="The ID of the asset to update the image for"),
+    image_data: ImageUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_admin_user: ORMUser = Depends(get_current_super_admin_user)
+):
+    """
+    Update the image URL for a specific asset.
+    This endpoint allows updating only the image without modifying other asset properties.
+    """
+    db_asset = asset_service.get_asset(db, asset_id=asset_id)
+    if not db_asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    asset_update = AssetUpdate(image_url=image_data.image_url)
+    updated_asset = asset_service.update_asset(db, asset_id=asset_id, asset_in=asset_update, current_user_id=current_admin_user.id)
+
+    return updated_asset
+
+class BulkDeleteRequest(BaseModel):
+    asset_ids: List[UUID]
+
+@router.post("/bulk-delete", status_code=status.HTTP_200_OK, summary="Delete multiple assets")
+def bulk_delete_assets(
+    delete_request: BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current_admin_user: ORMUser = Depends(get_current_super_admin_user)
+):
+    """
+    Delete multiple assets at once by providing a list of asset IDs.
+    Returns the count of successfully deleted assets.
+    """
+    deleted_count = 0
+    errors = []
+
+    for asset_id in delete_request.asset_ids:
+        try:
+            deleted_asset = asset_service.delete_asset(db, asset_id=asset_id, current_user_id=current_admin_user.id)
+            if deleted_asset:
+                deleted_count += 1
+            else:
+                errors.append({"asset_id": str(asset_id), "error": "Asset not found or already deleted"})
+        except Exception as e:
+            errors.append({"asset_id": str(asset_id), "error": str(e)})
+
+    return {
+        "deleted_count": deleted_count,
+        "total_requested": len(delete_request.asset_ids),
+        "errors": errors if errors else None
+    }
+
+class BulkUpdateRequest(BaseModel):
+    asset_ids: List[UUID]
+    value_estimate: Optional[float] = None
+    status: Optional[str] = None
+    image_url: Optional[str] = None
+
+@router.patch("/bulk-update", status_code=status.HTTP_200_OK, summary="Update multiple assets")
+def bulk_update_assets(
+    update_request: BulkUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin_user: ORMUser = Depends(get_current_super_admin_user)
+):
+    """
+    Update multiple assets at once. You can update value_estimate, status, or image_url.
+    All specified fields will be applied to all assets in the list.
+    """
+    updated_count = 0
+    errors = []
+
+    # Prepare update data
+    update_data = AssetUpdate(
+        value_estimate=update_request.value_estimate,
+        status=update_request.status,
+        image_url=update_request.image_url
+    )
+
+    for asset_id in update_request.asset_ids:
+        try:
+            updated_asset = asset_service.update_asset(
+                db,
+                asset_id=asset_id,
+                asset_in=update_data,
+                current_user_id=current_admin_user.id
+            )
+            if updated_asset:
+                updated_count += 1
+            else:
+                errors.append({"asset_id": str(asset_id), "error": "Asset not found"})
+        except Exception as e:
+            errors.append({"asset_id": str(asset_id), "error": str(e)})
+
+    return {
+        "updated_count": updated_count,
+        "total_requested": len(update_request.asset_ids),
+        "errors": errors if errors else None
+    }

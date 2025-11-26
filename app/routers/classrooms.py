@@ -1,13 +1,16 @@
 from uuid import UUID
-from typing import List
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.schemas.classroom import ClassroomCreate, ClassroomRead, ClassroomUpdate
 from app.services import classroom_service, school_service
 from app.models.classroom import Classroom as ClassroomModel # For response_model
+from app.models.asset import Asset, AssetTemplate, AssetCategory
 
 router = APIRouter()
 
@@ -110,3 +113,108 @@ def delete_existing_classroom(
     if db_classroom is None: # Or if it was already deleted and service returns None
         raise HTTPException(status_code=404, detail=f"Classroom with id {classroom_id} not found for deletion")
     return None
+
+# --- Asset Inventory for Classroom ---
+
+class AssetGroupItem(BaseModel):
+    template_name: str
+    category_name: Optional[str] = None
+    status: str
+    value_estimate: Optional[float] = None
+    quantity: int
+    total_value: Optional[float] = None
+    asset_ids: List[UUID]
+
+class ClassroomInventoryResponse(BaseModel):
+    classroom_id: UUID
+    classroom_name: str
+    classroom_code: str
+    school_id: UUID
+    assets: List[AssetGroupItem]
+    total_assets: int
+    total_value: float
+
+@router.get(
+    "/classrooms/{classroom_id}/inventory",
+    response_model=ClassroomInventoryResponse,
+    tags=["classrooms"],
+    summary="Get detailed inventory of classroom assets",
+)
+def get_classroom_inventory(
+    classroom_id: UUID = Path(..., description="The ID of the classroom to get inventory for"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get a detailed inventory of all assets in a classroom, grouped by template/type.
+    Shows quantity, total value, and other details for each asset type.
+
+    Example response shows assets grouped by template with:
+    - Template/asset name
+    - Category
+    - Status
+    - Individual value
+    - Quantity (number of assets of this type)
+    - Total value (quantity * individual value)
+    """
+    # Verify classroom exists
+    db_classroom = classroom_service.get_classroom(db, classroom_id=classroom_id)
+    if not db_classroom:
+        raise HTTPException(status_code=404, detail=f"Classroom with id {classroom_id} not found")
+
+    # Get all assets for this classroom (excluding deleted ones)
+    assets = db.query(Asset).filter(
+        Asset.classroom_id == classroom_id,
+        Asset.deleted_at == None
+    ).all()
+
+    # Group assets by template_id and status
+    asset_groups: Dict[tuple, Dict[str, Any]] = {}
+
+    for asset in assets:
+        # Get template name
+        template_name = "Sin template"
+        category_name = None
+
+        if asset.template_id and asset.template:
+            template_name = asset.template.name
+            if asset.template.category:
+                category_name = asset.template.category.name
+
+        # Create grouping key (template_id, status)
+        group_key = (str(asset.template_id) if asset.template_id else "no_template", asset.status)
+
+        if group_key not in asset_groups:
+            asset_groups[group_key] = {
+                "template_name": template_name,
+                "category_name": category_name,
+                "status": asset.status,
+                "value_estimate": float(asset.value_estimate) if asset.value_estimate else None,
+                "quantity": 0,
+                "total_value": 0.0,
+                "asset_ids": []
+            }
+
+        # Increment quantity
+        asset_groups[group_key]["quantity"] += 1
+        asset_groups[group_key]["asset_ids"].append(asset.id)
+
+        # Add to total value
+        if asset.value_estimate:
+            asset_groups[group_key]["total_value"] += float(asset.value_estimate)
+
+    # Convert to list
+    grouped_assets = [AssetGroupItem(**group_data) for group_data in asset_groups.values()]
+
+    # Calculate totals
+    total_assets = len(assets)
+    total_value = sum(float(asset.value_estimate) for asset in assets if asset.value_estimate) or 0.0
+
+    return ClassroomInventoryResponse(
+        classroom_id=db_classroom.id,
+        classroom_name=db_classroom.name,
+        classroom_code=db_classroom.code,
+        school_id=db_classroom.school_id,
+        assets=grouped_assets,
+        total_assets=total_assets,
+        total_value=total_value
+    )
