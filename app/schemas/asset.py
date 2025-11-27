@@ -12,7 +12,7 @@ class AssetTemplateShallowRead(BaseModel):
     name: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class AssetCategoryShallowRead(BaseModel):
     id: uuid.UUID
@@ -96,7 +96,7 @@ class AssetUpdate(AssetBase):
     serial_number: Optional[str] = None
     purchase_date: Optional[date] = None
     value_estimate: Optional[float] = None
-    image_url: Optional[HttpUrl] = None
+    image_url: Optional[str] = None  # Changed from HttpUrl to str to support base64 data URIs
     status: Optional[str] = None
 
 class AssetRead(AssetBase):
