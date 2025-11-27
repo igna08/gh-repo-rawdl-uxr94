@@ -3,10 +3,12 @@ from typing import Optional
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.services import report_service
+from app.services.pdf_export_service import pdf_generator
 from app.services.auth_service import get_current_user
 from app.models.user import User as ORMUser
 from app.models.user_role import UserRole as ORMUserRole
@@ -219,3 +221,182 @@ async def get_reports_overview(
     overview_data["incidents"]["date_range"]["preset"] = preset
 
     return ReportsOverview(**overview_data)
+
+
+# ============================================================================
+# PDF Export Endpoints
+# ============================================================================
+
+@router.get("/assets/export")
+async def export_asset_report_pdf(
+    start_date: Optional[str] = Query(None, description="Start date in ISO 8601 format (e.g., '2025-01-01')"),
+    end_date: Optional[str] = Query(None, description="End date in ISO 8601 format"),
+    preset: Optional[str] = Query(None, description="Preset range: today, week, month, quarter, year, all_time"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID (Super Admin only)"),
+    db: Session = Depends(get_db),
+    current_user: ORMUser = Depends(get_current_user)
+):
+    """
+    Export asset report as PDF file.
+
+    Returns a downloadable PDF file with comprehensive asset statistics,
+    breakdowns by status, category, and school.
+
+    **Date Filtering:**
+    - Use `preset` for quick ranges (today, week, month, quarter, year, all_time)
+    - Or use `start_date` and `end_date` for custom ranges
+    - Default: last 30 days
+
+    **Access Control:**
+    - Super Admin: Can view all schools or filter by specific school
+    - Other roles: Automatically filtered to their assigned school
+    """
+    # Apply school filtering based on user role
+    effective_school_id = apply_school_filter(db, current_user, school_id)
+
+    # Parse date range
+    start_dt, end_dt = report_service.parse_date_range(start_date, end_date, preset)
+
+    # Get report data
+    report_data = report_service.get_asset_report(
+        db=db,
+        start_date=start_dt,
+        end_date=end_dt,
+        school_id=effective_school_id
+    )
+
+    # Update date range info with preset if it was used
+    report_data["date_range"]["preset"] = preset
+
+    # Generate PDF
+    pdf_buffer = pdf_generator.generate_asset_report_pdf(report_data)
+
+    # Generate filename
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    filename = f"reporte_activos_{timestamp}.pdf"
+
+    # Return PDF as downloadable file
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
+
+
+@router.get("/incidents/export")
+async def export_incident_report_pdf(
+    start_date: Optional[str] = Query(None, description="Start date in ISO 8601 format (e.g., '2025-01-01')"),
+    end_date: Optional[str] = Query(None, description="End date in ISO 8601 format"),
+    preset: Optional[str] = Query(None, description="Preset range: today, week, month, quarter, year, all_time"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID (Super Admin only)"),
+    db: Session = Depends(get_db),
+    current_user: ORMUser = Depends(get_current_user)
+):
+    """
+    Export incident report as PDF file.
+
+    Returns a downloadable PDF file with incident analytics including
+    status breakdown, resolution times, and problematic assets.
+
+    **Date Filtering:**
+    - Use `preset` for quick ranges (today, week, month, quarter, year, all_time)
+    - Or use `start_date` and `end_date` for custom ranges
+    - Default: last 30 days
+
+    **Access Control:**
+    - Super Admin: Can view all schools or filter by specific school
+    - Other roles: Automatically filtered to their assigned school
+    """
+    # Apply school filtering based on user role
+    effective_school_id = apply_school_filter(db, current_user, school_id)
+
+    # Parse date range
+    start_dt, end_dt = report_service.parse_date_range(start_date, end_date, preset)
+
+    # Get report data
+    report_data = report_service.get_incident_report(
+        db=db,
+        start_date=start_dt,
+        end_date=end_dt,
+        school_id=effective_school_id
+    )
+
+    # Update date range info with preset if it was used
+    report_data["date_range"]["preset"] = preset
+
+    # Generate PDF
+    pdf_buffer = pdf_generator.generate_incident_report_pdf(report_data)
+
+    # Generate filename
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    filename = f"reporte_incidentes_{timestamp}.pdf"
+
+    # Return PDF as downloadable file
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
+
+
+@router.get("/overview/export")
+async def export_overview_report_pdf(
+    start_date: Optional[str] = Query(None, description="Start date in ISO 8601 format (e.g., '2025-01-01')"),
+    end_date: Optional[str] = Query(None, description="End date in ISO 8601 format"),
+    preset: Optional[str] = Query(None, description="Preset range: today, week, month, quarter, year, all_time"),
+    school_id: Optional[UUID] = Query(None, description="Filter by school ID (Super Admin only)"),
+    db: Session = Depends(get_db),
+    current_user: ORMUser = Depends(get_current_user)
+):
+    """
+    Export comprehensive overview report as PDF file.
+
+    Returns a downloadable PDF file combining asset and incident reports
+    in a single comprehensive document.
+
+    **Date Filtering:**
+    - Use `preset` for quick ranges (today, week, month, quarter, year, all_time)
+    - Or use `start_date` and `end_date` for custom ranges
+    - Default: last 30 days
+
+    **Access Control:**
+    - Super Admin: Can view all schools or filter by specific school
+    - Other roles: Automatically filtered to their assigned school
+    """
+    # Apply school filtering based on user role
+    effective_school_id = apply_school_filter(db, current_user, school_id)
+
+    # Parse date range
+    start_dt, end_dt = report_service.parse_date_range(start_date, end_date, preset)
+
+    # Get overview data
+    overview_data = report_service.get_reports_overview(
+        db=db,
+        start_date=start_dt,
+        end_date=end_dt,
+        school_id=effective_school_id
+    )
+
+    # Update date range info with preset if it was used
+    overview_data["assets"]["date_range"]["preset"] = preset
+    overview_data["incidents"]["date_range"]["preset"] = preset
+
+    # Generate PDF
+    pdf_buffer = pdf_generator.generate_overview_report_pdf(overview_data)
+
+    # Generate filename
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    filename = f"reporte_general_{timestamp}.pdf"
+
+    # Return PDF as downloadable file
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )

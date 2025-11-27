@@ -64,7 +64,7 @@ const { access_token } = await response.json();
 
 Base URL: `/api/reports`
 
-### 1. Reporte de Activos
+### 1. Reporte de Activos (JSON)
 
 ```
 GET /api/reports/assets
@@ -78,11 +78,11 @@ Obtiene estadísticas completas de activos con desgloses por estado, categoría 
 - `preset` (opcional): Rango predefinido ("today", "week", "month", "quarter", "year", "all_time")
 - `school_id` (opcional): UUID de la escuela (solo para Super Admin)
 
-**Response Model:** `AssetReport`
+**Response:** JSON (`AssetReport`)
 
 ---
 
-### 2. Reporte de Incidentes
+### 2. Reporte de Incidentes (JSON)
 
 ```
 GET /api/reports/incidents
@@ -96,11 +96,11 @@ Obtiene análisis completo de incidentes incluyendo métricas de resolución y a
 - `preset` (opcional): Rango predefinido
 - `school_id` (opcional): UUID de la escuela (solo para Super Admin)
 
-**Response Model:** `IncidentReport`
+**Response:** JSON (`IncidentReport`)
 
 ---
 
-### 3. Reporte Overview (Integral)
+### 3. Reporte Overview (JSON)
 
 ```
 GET /api/reports/overview
@@ -114,7 +114,87 @@ Obtiene un reporte integral combinando activos e incidentes en una sola respuest
 - `preset` (opcional): Rango predefinido
 - `school_id` (opcional): UUID de la escuela (solo para Super Admin)
 
-**Response Model:** `ReportsOverview`
+**Response:** JSON (`ReportsOverview`)
+
+---
+
+## 🎯 Exportación a PDF (NUEVO)
+
+### 4. Exportar Reporte de Activos (PDF)
+
+```
+GET /api/reports/assets/export
+```
+
+**Descarga un archivo PDF** con el reporte completo de activos formateado profesionalmente.
+
+**Parámetros de Query:**
+- `start_date` (opcional): Fecha de inicio en formato ISO 8601
+- `end_date` (opcional): Fecha de fin en formato ISO 8601
+- `preset` (opcional): Rango predefinido
+- `school_id` (opcional): UUID de la escuela (solo para Super Admin)
+
+**Response:** Archivo PDF descargable
+- **Filename:** `reporte_activos_YYYYMMDD_HHMMSS.pdf`
+- **Content-Type:** `application/pdf`
+
+**Contenido del PDF:**
+- 📊 Resumen ejecutivo con métricas clave
+- 📦 Distribución de activos por estado (tabla)
+- 🏷️ Distribución por categoría (tabla)
+- 🏫 Distribución por escuela (tabla)
+- 💎 Top 10 activos más valiosos
+
+---
+
+### 5. Exportar Reporte de Incidentes (PDF)
+
+```
+GET /api/reports/incidents/export
+```
+
+**Descarga un archivo PDF** con el análisis completo de incidentes.
+
+**Parámetros de Query:**
+- `start_date` (opcional): Fecha de inicio en formato ISO 8601
+- `end_date` (opcional): Fecha de fin en formato ISO 8601
+- `preset` (opcional): Rango predefinido
+- `school_id` (opcional): UUID de la escuela (solo para Super Admin)
+
+**Response:** Archivo PDF descargable
+- **Filename:** `reporte_incidentes_YYYYMMDD_HHMMSS.pdf`
+- **Content-Type:** `application/pdf`
+
+**Contenido del PDF:**
+- ⚠️ Distribución de incidentes por estado
+- ⏱️ Tiempo promedio de resolución
+- 🔧 Activos con más incidentes
+- 📋 Listado de incidentes recientes
+
+---
+
+### 6. Exportar Reporte General (PDF)
+
+```
+GET /api/reports/overview/export
+```
+
+**Descarga un archivo PDF** con el reporte integral combinando activos e incidentes.
+
+**Parámetros de Query:**
+- `start_date` (opcional): Fecha de inicio en formato ISO 8601
+- `end_date` (opcional): Fecha de fin en formato ISO 8601
+- `preset` (opcional): Rango predefinido
+- `school_id` (opcional): UUID de la escuela (solo para Super Admin)
+
+**Response:** Archivo PDF descargable
+- **Filename:** `reporte_general_YYYYMMDD_HHMMSS.pdf`
+- **Content-Type:** `application/pdf`
+
+**Contenido del PDF:**
+- **Sección Activos:** Todas las métricas y tablas de activos
+- **Sección Incidentes:** Todas las métricas y tablas de incidentes
+- Formato profesional de múltiples páginas
 
 ---
 
@@ -171,7 +251,124 @@ Si no especificas fechas ni preset:
 
 ## Ejemplos de Uso
 
-### Ejemplo 1: Obtener Reporte de Activos (Últimos 30 días)
+### Ejemplo 1: Descargar Reporte PDF de Activos
+
+```javascript
+async function downloadAssetReportPDF(preset = 'month') {
+  const token = localStorage.getItem('token');
+
+  const response = await fetch(`/api/reports/assets/export?preset=${preset}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  // Convertir respuesta a blob
+  const blob = await response.blob();
+
+  // Crear URL temporal para el blob
+  const url = window.URL.createObjectURL(blob);
+
+  // Crear elemento <a> temporal para descargar
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reporte_activos_${new Date().toISOString().split('T')[0]}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+
+  // Limpiar
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+// Uso
+downloadAssetReportPDF('month'); // Descarga PDF del último mes
+```
+
+### Ejemplo 2: Botón de Descarga en React
+
+```javascript
+function DownloadReportButton({ reportType = 'assets', preset = 'month' }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleDownload = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`/api/reports/${reportType}/export?preset=${preset}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al descargar el reporte');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_${reportType}_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error al descargar el reporte');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleDownload} disabled={loading}>
+      {loading ? 'Descargando...' : '📄 Descargar PDF'}
+    </button>
+  );
+}
+
+// Uso
+<DownloadReportButton reportType="assets" preset="month" />
+<DownloadReportButton reportType="incidents" preset="week" />
+<DownloadReportButton reportType="overview" preset="year" />
+```
+
+### Ejemplo 3: Abrir PDF en Nueva Pestaña (Sin Descargar)
+
+```javascript
+async function openAssetReportPDF(preset = 'month') {
+  const token = localStorage.getItem('token');
+
+  const response = await fetch(`/api/reports/assets/export?preset=${preset}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+
+  // Abrir en nueva pestaña
+  window.open(url, '_blank');
+
+  // Limpiar después de un tiempo (el PDF ya está abierto)
+  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}
+```
+
+### Ejemplo 4: Obtener Reporte JSON de Activos (Para Dashboards)
 
 ```javascript
 async function getAssetReport() {
