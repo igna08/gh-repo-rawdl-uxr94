@@ -7,9 +7,9 @@ from app.core.database import engine, Base
 
 # Import routers
 from app.routers import (
-    auth, users, schools, classrooms, 
+    auth, users, schools, classrooms,
     assets, qr_codes, incidents, subscriptions,
-    invitations, dashboard , user_admin
+    invitations, dashboard, user_admin, reports
 )
 
 @asynccontextmanager
@@ -59,6 +59,7 @@ app.include_router(subscriptions.router, prefix=settings.API_PREFIX)
 app.include_router(invitations.router, prefix=settings.API_PREFIX) # Added
 app.include_router(dashboard.router, prefix=settings.API_PREFIX) # Added
 app.include_router(user_admin.router, prefix=settings.API_PREFIX) # Added
+app.include_router(reports.router, prefix=settings.API_PREFIX) # Added
 
 # Ruta de verificación de salud
 @app.get("/")
