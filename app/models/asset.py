@@ -17,10 +17,11 @@ class AssetStatus(str, enum.Enum):
 
 class AssetStatusEnum(str, enum.Enum):
     available = "available"
+    in_use = "in_use"              # ✅ ESTE FALTABA
     in_repair = "in_repair"
     missing = "missing"
+    operational = "operational"
     decommissioned = "decommissioned"
-    operational = "operational" # Original value, kept for compatibility if used
 
 class AssetCategory(Base):
     __tablename__ = "asset_categories"
