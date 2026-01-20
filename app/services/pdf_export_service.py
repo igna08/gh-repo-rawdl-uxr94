@@ -201,10 +201,10 @@ class PDFReportGenerator:
             status_data = [['Estado', 'Cantidad', 'Valor Total']]
             status_names = {
                 'available': 'Disponible',
-                'in_repair': 'En Reparación',
-                'missing': 'Perdido',
-                'decommissioned': 'Dado de Baja',
-                'operational': 'Operacional'
+                'in_use': 'En Uso',
+                'maintenance': 'Mantenimiento',
+                'retired': 'Retirado',
+                'decommissioned': 'Dado de Baja'
             }
 
             for item in report_data['by_status']:
@@ -390,10 +390,10 @@ class PDFReportGenerator:
             status_data = [['Estado', 'Cantidad', 'Valor']]
             status_names = {
                 'available': 'Disponible',
-                'in_repair': 'En Reparación',
-                'missing': 'Perdido',
-                'decommissioned': 'Dado de Baja',
-                'operational': 'Operacional'
+                'in_use': 'En Uso',
+                'maintenance': 'Mantenimiento',
+                'retired': 'Retirado',
+                'decommissioned': 'Dado de Baja'
             }
 
             for item in assets_data['by_status']:

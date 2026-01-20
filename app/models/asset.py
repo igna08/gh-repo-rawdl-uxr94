@@ -8,19 +8,17 @@ from datetime import datetime
 from app.core.database import Base
 
 class AssetStatus(str, enum.Enum):
-    operational = "operational"
+    available = "available"
+    in_use = "in_use"
+    maintenance = "maintenance"
+    retired = "retired"
     decommissioned = "decommissioned"
-    # Added from schema for more detailed status
-    available = "available" 
-    in_repair = "in_repair"
-    missing = "missing"
 
 class AssetStatusEnum(str, enum.Enum):
     available = "available"
-    in_use = "in_use"              # ✅ ESTE FALTABA
-    in_repair = "in_repair"
-    missing = "missing"
-    operational = "operational"
+    in_use = "in_use"
+    maintenance = "maintenance"
+    retired = "retired"
     decommissioned = "decommissioned"
 
 class AssetCategory(Base):
