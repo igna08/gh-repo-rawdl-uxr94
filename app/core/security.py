@@ -7,8 +7,12 @@ from passlib.context import CryptContext
 from uuid import UUID
 from app.core.config import settings
 
-# Contexto para manejar hashes de contraseñas
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Usa bcrypt_sha256 para evitar truncado silencioso en passwords largos.
+# Mantiene bcrypt para verificar hashes legacy existentes.
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256", "bcrypt"],
+    deprecated="auto",
+)
 
 def create_access_token(
     subject: Union[str, UUID], expires_delta: Optional[timedelta] = None
